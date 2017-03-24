@@ -1,0 +1,8 @@
+project(test)
+cmake_minimum_required(VERSION 2.8)
+set (CMAKE_CXX_STANDARD 11)
+find_package(YARP REQUIRED)
+include_directories(${YARP_INCLUDE_DIRS})
+set( EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR} )
+add_executable(${PROJECT_NAME} main.cpp)
+target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES})
