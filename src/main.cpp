@@ -26,6 +26,9 @@ void delay(double s)
 
 class threadA : public RateThread
 {
+private:
+    int a = 1;
+
 public:
     Mutex m;
     threadA() : RateThread(5) {}
@@ -35,12 +38,11 @@ public:
         return true;
     }
 
-    void f()
+    void f(string p, int &b)
     {
         m.lock();
-        static int n = 1;
-        n += 2;
-        yDebug() << n;
+        b++;
+        yDebug() << p << b;
         m.unlock();
     }
 
@@ -48,9 +50,9 @@ public:
     {
         m.lock();
         static int n = 0;
-        n += 2;
-        yDebug() << "a" << n;
-        delay(0.025);
+        a++;
+        yDebug() << "a" << a;
+        delay(0.1);
         m.unlock();
     }
 };
@@ -59,6 +61,7 @@ class threadB : public RateThread
 {
 public:
     threadA* a;
+    int cane = 0;
     std::string l;
     threadB(std::string inL) : RateThread(20), l(inL) {}
     virtual ~threadB() {}
@@ -69,8 +72,7 @@ public:
 
     virtual void run()
     {
-        yDebug() << l;
-        a->f();
+        a->f(l, cane);
     }
 };
 
@@ -377,9 +379,7 @@ int main(int argc, char* argv[])
     b.start();
     c.start();
     d.start();
-    while (true)
-    {
 
-    }
+    yarp::os::Time::delay(20);
     return 0;
 }
