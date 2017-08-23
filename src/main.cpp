@@ -28,7 +28,7 @@ class threadA : public RateThread
 {
 public:
     Mutex m;
-    threadA() : RateThread(1) {}
+    threadA() : RateThread(5) {}
     virtual ~threadA() {}
     virtual bool threadInit()
     {
@@ -40,7 +40,7 @@ public:
         m.lock();
         static int n = 1;
         n += 2;
-        yDebug() << "b" << n;
+        yDebug() << n;
         m.unlock();
     }
 
@@ -50,7 +50,7 @@ public:
         static int n = 0;
         n += 2;
         yDebug() << "a" << n;
-        delay(0.5);
+        delay(0.025);
         m.unlock();
     }
 };
@@ -59,7 +59,8 @@ class threadB : public RateThread
 {
 public:
     threadA* a;
-    threadB() : RateThread(10) {}
+    std::string l;
+    threadB(std::string inL) : RateThread(20), l(inL) {}
     virtual ~threadB() {}
     virtual bool threadInit()
     {
@@ -68,6 +69,7 @@ public:
 
     virtual void run()
     {
+        yDebug() << l;
         a->f();
     }
 };
@@ -365,10 +367,16 @@ int main(int argc, char* argv[])
     //testJoypad(argc, argv);
     //testConnectUDP(argc, argv);
     threadA a;
-    threadB b;
+    threadB b("b");
+    threadB c("c");
+    threadB d("d");
     b.a = &a;
+    c.a = &a;
+    d.a = &a;
     a.start();
     b.start();
+    c.start();
+    d.start();
     while (true)
     {
 
