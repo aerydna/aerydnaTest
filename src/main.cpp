@@ -5,16 +5,77 @@
 #include <stdio.h>
 #include <yarp/os/ResourceFinder.h>
 #include <bitset>
+#include <yarp/os/RateThread.h>
+#include <yarp/os/Mutex.h>
+
 using namespace yarp::os;
 using namespace yarp::dev;
 using namespace yarp::sig;
 using namespace std;
 
+void delay(double s)
+{
+    volatile int a = 0;
+    double currtime = yarp::os::Time::now();
+    while (yarp::os::Time::now() - currtime < s)
+    {
+        a++;
+    }
+    return;
+}
+
+class threadA : public RateThread
+{
+public:
+    Mutex m;
+    threadA() : RateThread(1) {}
+    virtual ~threadA() {}
+    virtual bool threadInit()
+    {
+        return true;
+    }
+
+    void f()
+    {
+        m.lock();
+        static int n = 1;
+        n += 2;
+        yDebug() << "b" << n;
+        m.unlock();
+    }
+
+    virtual void run()
+    {
+        m.lock();
+        static int n = 0;
+        n += 2;
+        yDebug() << "a" << n;
+        delay(0.5);
+        m.unlock();
+    }
+};
+
+class threadB : public RateThread
+{
+public:
+    threadA* a;
+    threadB() : RateThread(10) {}
+    virtual ~threadB() {}
+    virtual bool threadInit()
+    {
+        return a != nullptr;
+    }
+
+    virtual void run()
+    {
+        a->f();
+    }
+};
+
 int testJoypad(int argc, char *argv[])
 {
     IJoypadController* controller;
     PolyDriver         client;
-    PolyDriver         server;
     Property           clientCfg, serverCfg;
     bool               allfine;
 
@@ -24,17 +85,9 @@ int testJoypad(int argc, char *argv[])
     ResourceFinder r;
     r.configure(argc, argv);
 
-    serverCfg.put("device",             "JoypadControlServer");
-    serverCfg.put("subdevice",          "SDLJoypad");
-    serverCfg.put("name",               "/joypad");
-    serverCfg.put("use_separate_ports", 1);
-    allfine = server.open(serverCfg);
-    yarp::os::Time::delay(2);
-    if(!allfine) yError() << "server not fine";
-
     clientCfg.put("device", "JoypadControlClient");
     clientCfg.put("local",  "/joyclient");
-    clientCfg.put("remote", "/joypad");
+    clientCfg.put("remote", "/dualshock4");
     allfine &= client.open(clientCfg);
     if(!allfine) yError() << "client not fine";
     allfine &= client.view(controller);
@@ -81,50 +134,56 @@ int testJoypad(int argc, char *argv[])
         }
         yInfo() << message;
 
-        message = "Stick: ";
+        message = "Stick:\n";
         controller->getStickCount(count);
         for(int i = 0; i < count; ++i)
         {
             Vector data;
             controller->getStick(i, data, yarp::dev::IJoypadController::JypCtrlcoord_CARTESIAN);
-            message += "n_" + to_string(i) + ": ";
+            message += "  n_" + to_string(i) + ": ";
             for (int j = 0; j < data.size(); ++j)
             {
                 message += to_string(data[j]) + " ";
             }
-            message += "\n";
-
+            if (i + 1 < count) {
+                message += "\n";
+            }
         }
         yInfo() << message;
 
-        message = "trackball: ";
+        message = "trackball:\n";
         controller->getTrackballCount(count);
         for(int i = 0; i < count; ++i)
         {
             Vector data;
             controller->getTrackball(i, data);
-            message += "n_" + to_string(i) + ": ";
+            message += "  n_" + to_string(i) + ": ";
             for (int j = 0; j < data.size(); ++j)
             {
                 message += to_string(data[j]) + " ";
             }
-            message += "\n";
+            if (i + 1 < count) {
+                message += "\n";
+            }
         }
 
-        message = "touch Surface: ";
+        message = "touch Surface:\n";
         controller->getTouchSurfaceCount(count);
         for(int i = 0; i < count; ++i)
         {
             Vector data;
             controller->getTouch(i, data);
-            message += "n_" + to_string(i) + ": ";
+            message += "  n_" + to_string(i) + ": ";
             for (int j = 0; j < data.size(); ++j)
             {
                 message += to_string(data[j]) + " ";
             }
-            message += "\n";
+            if (i + 1 < count) {
+                message += "\n";
+            }
         }
         yInfo() << message;
+        yInfo() << "---------------------------------------";
         yarp::os::Time::delay(0.1);
     }
 }
@@ -271,9 +330,48 @@ int testRGBD(int argc, char *argv[])
     return 0;
 }
 
+int testConnectUDP(int argc, char *argv[])
+{
+    yarp::os::Network yarp;
+
+    yarp::os::BufferedPort<yarp::sig::Vector> port;
+
+    yarp::os::Contactable* ctbl = dynamic_cast<yarp::os::Contactable*>(&port);
+
+    ctbl->open("/stica");
+//    yarp::os::Network::sync(ctbl->getName());
+    if (!yarp::os::NetworkBase::connect("/dualshock4/buttons:o", ctbl->getName()), "udp") {
+        yError() << "Connection failed";
+        return 1;
+    }
+
+    while (true) {
+        Vector *v = port.read();
+        if (v) {
+            yDebug() << v->toString();
+        }
+        yarp::os::Time::delay(1.0);
+    }
+
+    ctbl->interrupt();
+    ctbl->close();
+    return 0;
+}
+
 int main(int argc, char* argv[])
 {
+    yarp::os::Network net;
     //testRGBD(argc, argv);
-    testJoypad(argc, argv);
+    //testJoypad(argc, argv);
+    //testConnectUDP(argc, argv);
+    threadA a;
+    threadB b;
+    b.a = &a;
+    a.start();
+    b.start();
+    while (true)
+    {
+
+    }
     return 0;
 }
