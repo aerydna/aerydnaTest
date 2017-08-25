@@ -76,6 +76,27 @@ public:
     }
 };
 
+/*
+class threadC : public Thread
+{
+public:
+    Mutex m1, m2, m3, m4;
+    int cane = 0;
+    std::string l;
+    threadB(std::string inL) : l(inL) {}
+    virtual ~threadB() {}
+    virtual bool threadInit()
+    {
+        return a != nullptr;
+    }
+
+    virtual void run()
+    {
+        a->f(l, cane);
+    }
+};
+*/
+
 int testJoypad(int argc, char *argv[])
 {
     IJoypadController* controller;
@@ -362,6 +383,55 @@ int testConnectUDP(int argc, char *argv[])
     return 0;
 }
 
+
+class MutexTest : public Thread
+{
+public:
+    Mutex synch, *mainMutex;     // to be synchronized by main
+
+private:
+    Mutex *protect;           // shared mutex for protected zone
+    threadA* a;
+    int cane = 0;
+    std::string name;
+
+public:
+    MutexTest(std::string _name, Mutex *_protect, Mutex *_mainMutex) :  Thread(), name(_name),
+                                                                        protect(_protect), mainMutex(_mainMutex)
+
+    { }
+
+    virtual ~MutexTest() {}
+
+    virtual bool threadInit()
+    {
+//         std::cout << name << " threadInit" << endl;
+        synch.lock();
+//         std::cout << name << " first lock done" << endl;
+        return true;
+    }
+
+    virtual void run()
+    {
+        bool gotcha = protect->tryLock();
+        std::cout << name << " trylock " << (gotcha? "true":"false") << endl;
+        std::cout << name << " unlock main mutex " << endl;
+//         Time::delay(1);
+        mainMutex->unlock();
+        std::cout << name << " calling lock " << endl;
+        protect->lock();
+        std::cout << name << " after first lock " << endl;
+        protect->lock();
+        std::cout << name << " after second lock " << endl;
+
+/*
+        gotcha = protect->tryLock();
+        std::cout << name << " trylock " << (gotcha? "true":"false") << endl;
+*/
+    }
+};
+
+#if 0
 int main(int argc, char* argv[])
 {
     yarp::os::Network net;
@@ -383,3 +453,63 @@ int main(int argc, char* argv[])
     yarp::os::Time::delay(20);
     return 0;
 }
+#endif
+
+int main(int argc, char* argv[])
+{
+    yarp::os::Network yarp;
+    Mutex mainMutex, protect;
+
+    MutexTest test1("T1", &protect, &mainMutex);
+    MutexTest test2("T2", &protect, &mainMutex);
+    MutexTest test3("T3", &protect, &mainMutex);
+
+    mainMutex.lock();
+
+    // instantiate all threads, and make them wait on mutex ON ORDER!!
+    test1.start();
+    mainMutex.lock();   // wait for thread to be started
+    cout << "\nmain after T1 start " << endl;
+
+    test2.start();
+    mainMutex.lock();   // wait for thread to be started
+    cout << "\nmain after T2 start " << endl;
+
+    test3.start();
+    mainMutex.lock();   // wait for thread to be started
+    cout << "\nmain after T3 start " << endl;
+
+
+    // wake up someone
+//     Time::delay(0.5);
+    protect.unlock();
+//     cout << __LINE__ << endl;
+
+//     Time::delay(0.5);
+    protect.unlock();
+//     cout << __LINE__ << endl;
+
+//     Time::delay(0.5);
+    protect.unlock();
+//     cout << __LINE__ << endl;
+
+//     Time::delay(0.5);
+    protect.unlock();
+//     cout << __LINE__ << endl;
+
+//     Time::delay(0.5);
+    protect.unlock();
+//     cout << __LINE__ << endl;
+
+//     Time::delay(0.5);
+    protect.unlock();
+//     cout << __LINE__ << endl;
+
+
+    test1.stop();
+    test2.stop();
+    test3.stop();
+    cout << __LINE__ << endl;
+    return 0;
+}
+
