@@ -1,3 +1,0 @@
-/media/aruzzenenti/OS/software/RGBDtest/testRGBD/CMakeFiles/edit_cache.dir
-/media/aruzzenenti/OS/software/RGBDtest/testRGBD/CMakeFiles/rebuild_cache.dir
-/media/aruzzenenti/OS/software/RGBDtest/testRGBD/CMakeFiles/testRGBD.dir
