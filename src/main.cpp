@@ -7,6 +7,8 @@
 #include <bitset>
 #include <yarp/os/RateThread.h>
 #include <yarp/os/Mutex.h>
+#include <yarp/serversql/Server.h>
+#include <yarp/os/Timer.h>
 
 using namespace yarp::os;
 using namespace yarp::dev;
@@ -362,12 +364,8 @@ int testConnectUDP(int argc, char *argv[])
     return 0;
 }
 
-int main(int argc, char* argv[])
+int testThreads()
 {
-    yarp::os::Network net;
-    //testRGBD(argc, argv);
-    //testJoypad(argc, argv);
-    //testConnectUDP(argc, argv);
     threadA a;
     threadB b("b");
     threadB c("c");
@@ -379,7 +377,153 @@ int main(int argc, char* argv[])
     b.start();
     c.start();
     d.start();
+}
 
-    yarp::os::Time::delay(20);
+class yarpServerThread : public yarp::os::Thread
+{
+    typedef yarp::serversql::Server Server;
+
+    Server ys;
+    int    argc;
+    char** argv;
+
+    virtual void run() override
+    {
+        ys.run(argc, argv);
+    }
+
+    virtual void onStop() override
+    {
+        ys.stop();
+    }
+public:
+    virtual void configure(int inArgc, char** inArgv)
+    {
+        argc = inArgc;
+        argv = inArgv;
+    }
+};
+
+class rateport : public yarp::os::RateThread,
+                 public yarp::os::Port
+{
+public:
+    rateport() : RateThread(10){}
+    virtual void run()
+    {
+        Bottle b;
+        read(b);
+        yDebug() << "ssfddfsfdsdf" << b.get(0).asInt();
+    }
+};
+
+int testPersistent(int argc, char* argv[])
+{
+#define range(a) int i = 0; i < a; i++
+    yarpServerThread ys;
+    ys.configure(argc, argv);
+    ys.start();
+    yarp::os::Port a;
+    rateport b;
+    a.open("/a");
+    b.open("/b");
+    b.start();
+    yarp::os::ContactStyle style;
+    style.persistent = true;
+    yarp::os::Network::connect("/a", "/b");
+    Bottle bot;
+    bot.addInt(42);
+
+    for(range(100))
+    {
+        a.write(bot);
+        yDebug() << "closing a";
+        a.close();
+        yarp::os::Time::delay(1);
+        yDebug() << "opening a";
+        a.open("/a");
+    }
+
     return 0;
+}
+
+void MiaStaticCallback(const yarp::os::YarpTimerEvent& event)
+{
+    yDebug() << event.lastDuration + 100;
+}
+
+class TimerTest
+{
+public:
+
+    bool a{true};
+    yarp::os::Mutex m;
+    TimerTest()
+    {
+        timer.start();
+        timer2.start();
+        timer3.start();
+        yarp::os::Time::delay(20);
+    }
+
+    bool checkTime(const yarp::os::YarpTimerEvent& event)
+    {
+        static auto ev = event;
+        yDebug() << ev.currentExpected - event.lastExpected;
+        yDebug() << ev.currentReal - event.lastReal;
+        yDebug() << ev.lastDuration;
+        yDebug() << event.runCount;
+        ev = event;
+        return true;
+    }
+
+    bool miacallback(const yarp::os::YarpTimerEvent& event)
+    {
+        if(!a)
+        {
+            yError() << "no";
+        }
+
+        a = false;
+        yarp::os::Time::delay(0.8);
+        if(a)
+        {
+            yError() << "noooooo";
+        }
+        else
+        {
+            yInfo() << "yes";
+        }
+        return true;
+    }
+
+    bool miacallback2(const yarp::os::YarpTimerEvent& event)
+    {
+        a = true;
+        return true;
+    }
+
+    TimerSettings t{std::chrono::milliseconds(1000)};
+
+    yarp::os::Timer timer{t, &TimerTest::miacallback, this, &m};
+    yarp::os::Timer timer2{TimerSettings(std::chrono::milliseconds(100)), &TimerTest::miacallback2, this, &m};
+    yarp::os::Timer timer3{TimerSettings(std::chrono::milliseconds(1000)), &TimerTest::checkTime, this};
+};
+
+int testTimer()
+{
+    TimerTest();
+    return 0;
+}
+
+int main(int argc, char* argv[])
+{
+    yarp::os::Network net;
+    //testRGBD(argc, argv);
+    //testJoypad(argc, argv);
+    //testConnectUDP(argc, argv);
+    //testThread();
+    //testPersistent(argc, argv);
+    testTimer();
+
 }
